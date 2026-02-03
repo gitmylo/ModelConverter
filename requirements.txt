@@ -1,0 +1,5 @@
+﻿torchao==0.10.0
+safetensors
+torch
+optimum-quanto==0.2.4
+comfy-kitchen
