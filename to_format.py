@@ -37,8 +37,10 @@ def main():
     output_lora = ".".join(input_file.split(".")[:-1]) + f"_{format_name}_svd-corrector_rank{svd_rank}.safetensors"
     in_meta = safetensors.safe_open(input_file, "pt").metadata()
     if in_meta is not None:
-        in_meta = in_meta.get("_quantization_metadata", None)
-    in_model = QuantizedWeightLoader(safetensors.torch.load_file(input_file), in_meta)
+        in_meta_q = in_meta.get("_quantization_metadata", None)
+    else:
+        in_meta = {}
+    in_model = QuantizedWeightLoader(safetensors.torch.load_file(input_file), in_meta_q)
     out_model = {}
     quant_metadata = {}
     lora_model = {}
@@ -68,10 +70,11 @@ def main():
     #         quant_metadata = quant_metadata | meta # Merge the metadata
 
     if len(quant_metadata) == 0:
-        safetensors.torch.save_file(in_model.to_dict() | out_model, output_file)
+        safetensors.torch.save_file(in_model.to_dict() | out_model, output_file,
+                                    metadata=in_meta)
     else:
         safetensors.torch.save_file(in_model.to_dict() | out_model, output_file,
-                                    metadata={"_quantization_metadata": json.dumps({"format_version": "1.0", "layers": quant_metadata})})
+                                    metadata=in_meta | {"_quantization_metadata": json.dumps({"format_version": "1.0", "layers": quant_metadata})})
     if svd_rank is not None:
         if svd_lora_weight_prefix is not None:
             add_lora_prefix(lora_model, svd_lora_weight_prefix)
