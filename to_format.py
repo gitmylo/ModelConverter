@@ -39,7 +39,7 @@ def main():
     if in_meta is not None:
         in_meta_q = in_meta.get("_quantization_metadata", None)
     else:
-        in_meta = {}
+        in_meta_q = None
     in_model = QuantizedWeightLoader(safetensors.torch.load_file(input_file), in_meta_q)
     out_model = {}
     quant_metadata = {}

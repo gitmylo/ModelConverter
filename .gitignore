@@ -1,3 +1,6 @@
 ﻿filter_model.py
 fix_zimage.py
 quick_part_merger.py
+loraconcat.py
+gguf_to_st.py
+compare_gguf_values_grouped.py
