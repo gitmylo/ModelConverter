@@ -53,7 +53,7 @@ def main():
     prog.set_description_str(f"Converting to {format_name}")
     for key in prog:
         target_type = targets[key]
-        target_name = str(target_type).removeprefix("torch.").replace("float", "fp")
+        target_name = str(target_type).removeprefix("torch.").replace("bfloat", "bf").replace("float", "fp")
         prog.set_description_str(f"Converting to {target_name}")
         prog.set_postfix_str(key)
         # whole_model[key] = whole_model[key].to(target_format)
