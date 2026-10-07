@@ -19,6 +19,7 @@ Supports converting to the following types (and aliases):
 * `fp8_e5m2` - `fp8_e5`
 * `nvfp4` - `fp4` (using comfy kitchen)
 * `fp8_scaled` - `scaled_fp8` (using comfy kitchen)
+* `int8` (using comfy kitchen, supports `--convrot` flag to enable convrot, and `--groupsize 256` to set custom convrot groupsize)
 
 ### additional features
 * SVD creation from precision losses `use --svd [rank]` to create a corrector lora. (Note: effectiveness depends on implementation.)

@@ -9,7 +9,7 @@ should_return = "=" # Regex that indicates that the line is a return line, expec
 # A node in the full tree, represents its own rule and contains its children
 class SCRulesNode:
     def __init__(self, rule: str = ""): # An empty rule is skipped
-        self.rule = rule # TODO: Parse rules
+        self.rule = rule
         self.children = []
 
     def match_str(self, string: str) -> int | bool | None: # int or bool for return, None for no return
