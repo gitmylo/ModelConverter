@@ -25,4 +25,4 @@ Supports converting to the following types (and aliases):
 * SVD creation from precision losses `use --svd [rank]` to create a corrector lora. (Note: effectiveness depends on implementation.)
 
 ## Credits
-* [comfy kitchen](https://github.com/Comfy-Org/comfy-kitchen) - Used for nvfp4 and fp8 scaled quantization and dequantization.
+* [comfy kitchen](https://github.com/Comfy-Org/comfy-kitchen) - Used for nvfp4, fp8 scaled and int8 quantization and dequantization.
