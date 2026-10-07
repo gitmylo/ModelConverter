@@ -6,7 +6,7 @@ import torch
 from tqdm import tqdm
 
 from kitchen_util import quantize_nvfp4_weights, quantize_fp8_scaled_weights, decompose_lora_from_diff, \
-    QuantizedWeightLoader
+    QuantizedWeightLoader, quantize_int8_tensorwise_optconvrot_weights
 from sc_parser import build_sc_tree
 
 
@@ -33,6 +33,12 @@ def main():
         return result
 
     format_name = str(target_format[0]).removeprefix("torch.").replace("float", "fp") + ("_mixed" if len(target_format) > 1 else "")
+    if args.convrot:
+        if format_name == "int8":
+            format_name = format_name + "_convrot"
+        else:
+            print("Convrot is not supported for non int8 formats currently, exiting.")
+            exit()
     output_file = ".".join(input_file.split(".")[:-1]) + f"_{format_name}.safetensors"
     output_lora = ".".join(input_file.split(".")[:-1]) + f"_{format_name}_svd-corrector_rank{svd_rank}.safetensors"
     in_meta = safetensors.safe_open(input_file, "pt").metadata()
@@ -54,10 +60,12 @@ def main():
     for key in prog:
         target_type = targets[key]
         target_name = str(target_type).removeprefix("torch.").replace("bfloat", "bf").replace("float", "fp")
+        if args.convrot:
+            target_name = target_name + "_convrot"
         prog.set_description_str(f"Converting to {target_name}")
         prog.set_postfix_str(key)
         # whole_model[key] = whole_model[key].to(target_format)
-        keys, meta, lora_model = to_format(in_model[key], key, target_type, lora_model, svd_rank)
+        keys, meta, lora_model = to_format(in_model[key], key, target_type, lora_model, svd_rank, args)
         in_model.pop(key, None)  # Remove key
         out_model = out_model | keys  # Merge the keys
         quant_metadata = quant_metadata | meta  # Merge the metadata
@@ -88,7 +96,7 @@ def response_to_type(response: int | bool, target_format) -> torch.dtype | str |
         return target_format[0]
     return None
 
-def to_format(t: torch.Tensor, name: str, format: torch.dtype | str, lora: dict[str, torch.Tensor], svd_rank: int | None) -> tuple[dict[str, torch.Tensor], dict[str, dict[str, str]], dict[str, torch.Tensor]]:
+def to_format(t: torch.Tensor, name: str, format: torch.dtype | str, lora: dict[str, torch.Tensor], svd_rank: int | None, args) -> tuple[dict[str, torch.Tensor], dict[str, dict[str, str]], dict[str, torch.Tensor]]:
     if isinstance(format, torch.dtype):
         return to_torch_format(t, name, format, lora, svd_rank)
     match format.lower().replace("float", "fp"):
@@ -96,7 +104,8 @@ def to_format(t: torch.Tensor, name: str, format: torch.dtype | str, lora: dict[
             return quantize_nvfp4_weights(t, name, lora, svd_rank)
         case "fp8_scaled" | "scaled_fp8":
             return quantize_fp8_scaled_weights(t, name, lora, svd_rank)
-
+        case "int8":
+            return quantize_int8_tensorwise_optconvrot_weights(t, name, args.convrot, args.groupsize, lora, svd_rank)
         # Torch type aliases
         case _:
             return to_torch_format(t, name, name_to_torch_format(format), lora, svd_rank)
@@ -120,6 +129,8 @@ def name_to_torch_format(name: str):
             return "nvfp4"
         case "scaled_fp8":
             return "fp8_scaled"
+        case "int8": # Technically torch but has extra flags
+            return "int8"
     return name
 
 def to_torch_format(t: torch.Tensor, name: str, format: torch.dtype, lora: dict[str, torch.Tensor], svd_rank: int | None) -> tuple[dict[str, torch.Tensor], dict[str, dict[str, str]], dict[str, torch.Tensor]]:
@@ -140,6 +151,8 @@ def parse_args():
     parser.add_argument("format", type=str, nargs="+", help="The quantization format, for example fp4, fp8, fp8_e5m2, fp8_scaled, bf16. Multiple values supported for mixed quant.")
     parser.add_argument("--svd", type=int, default=None, help="Svd rank to use.")
     parser.add_argument("--svd-prefix", type=str, default="diffusion_model.", help="Custom prefix for svd lora weights.")
+    parser.add_argument("--convrot", action="store_true", help="Whether to use convrot in int8.")
+    parser.add_argument("--groupsize", type=int, default=256, help="Group size for convrot.")
 
     return parser.parse_args()
 

@@ -1,10 +1,11 @@
 ﻿import json
+from typing import Any
 
-from comfy_kitchen.tensor import QuantizedTensor, TensorCoreFP8Layout, TensorCoreNVFP4Layout
+from comfy_kitchen.tensor import QuantizedTensor, TensorCoreFP8Layout, TensorCoreNVFP4Layout, TensorWiseINT8Layout
 import comfy_kitchen as ck
 import torch
 
-def quantize_nvfp4_weights(t: torch.Tensor, name: str, lora: dict[str, torch.Tensor], rank: int | None) -> tuple[dict[str, torch.Tensor], dict[str, dict[str, str]], dict[str, torch.Tensor]]:
+def quantize_nvfp4_weights(t: torch.Tensor, name: str, lora: dict[str, torch.Tensor], rank: int | None) -> tuple[dict[str, torch.Tensor], dict[str, dict[str, Any]], dict[str, torch.Tensor]]:
     if t.dtype not in [torch.float32, torch.float16, torch.bfloat16]: # Convert fp8, note: no fp8 scaled tensor loading yet, only regular fp8 models supported here.
         t = t.half()
     qt = QuantizedTensor.from_float(t, "TensorCoreNVFP4Layout")
@@ -18,7 +19,7 @@ def quantize_nvfp4_weights(t: torch.Tensor, name: str, lora: dict[str, torch.Ten
         f"{name.removesuffix("weight")}comfy_quant": torch.tensor(list(json.dumps(q_data).encode('utf-8')), dtype=torch.uint8)
     }, {name.removesuffix(".weight"): q_data}, lora
 
-def quantize_fp8_scaled_weights(t: torch.Tensor, name: str, lora: dict[str, torch.Tensor], rank: int | None) -> tuple[dict[str, torch.Tensor], dict[str, dict[str, str]], dict[str, torch.Tensor]]:
+def quantize_fp8_scaled_weights(t: torch.Tensor, name: str, lora: dict[str, torch.Tensor], rank: int | None) -> tuple[dict[str, torch.Tensor], dict[str, dict[str, Any]], dict[str, torch.Tensor]]:
     if t.dtype not in [torch.float32, torch.float16, torch.bfloat16]: # Convert fp8, note: no fp8 scaled tensor loading yet, only regular fp8 models supported here.
         t = t.half()
     qt = QuantizedTensor.from_float(t, "TensorCoreFP8Layout")
@@ -29,8 +30,20 @@ def quantize_fp8_scaled_weights(t: torch.Tensor, name: str, lora: dict[str, torc
         f"{name}": qt._qdata,
         f"{name}_scale": qt.params.scale,
         f"{name.removesuffix("weight")}comfy_quant": torch.tensor(list(json.dumps(q_data).encode('utf-8')), dtype=torch.uint8)
-        # f"{name}_scale_2": qt.params.scale
     }, {name.removesuffix(".weight"): q_data}, lora
+
+def quantize_int8_tensorwise_optconvrot_weights(t: torch.Tensor, name: str, convrot: bool, groupsize: int, lora: dict[str, torch.Tensor], rank: int | None) -> tuple[dict[str, torch.Tensor], dict[str, dict[str, Any]], dict[str, torch.Tensor]]:
+    if t.dtype not in [torch.float32, torch.float16, torch.bfloat16]: # Convert fp8, note: no fp8 scaled tensor loading yet, only regular fp8 models supported here.
+        t = t.half()
+    qt = QuantizedTensor.from_float(t, "TensorWiseINT8Layout", convrot=convrot, convrot_groupsize=groupsize, per_channel=convrot) # Int8 is not convrot by default, needs args
+    if rank is not None:
+        lora = lora | decompose_lora_from_diff(t - qt.dequantize(), name, rank)
+    q_data = {"format": "int8_tensorwise", "convrot": convrot, "convrot_groupsize": 256}
+    return {
+        f"{name}": qt._qdata,
+        f"{name}_scale": qt.params.scale,
+        f"{name.removesuffix("weight")}comfy_quant": torch.tensor(list(json.dumps(q_data).encode('utf-8')), dtype=torch.uint8)
+    }, {name.removesuffix("weight"): q_data}, lora
 
 def decompose_lora_from_diff(diff: torch.Tensor, name: str, rank: int) -> dict[str, torch.Tensor]:
     if not name.endswith(".weight"):
